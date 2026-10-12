@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self'; script-src 'unsafe-inline'; connect-src https://oauth2.googleapis.com https://www.googleapis.com; form-action 'none'; base-uri 'none'">
+<title>Unmade publisher sign-in</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="style.css">
+<style>
+  .step { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 16px; margin: 16px 0; }
+  .step h2 { margin: 0 0 6px; font-size: 18px; }
+  .step p { margin: 6px 0 12px; }
+  .num { color: var(--signal); font-weight: 800; margin-right: 6px; }
+  label { display: block; font-size: 14px; color: var(--muted); margin: 10px 0 4px; }
+  input[type=text], input[type=password], textarea {
+    width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--ground); color: var(--hi); font: 15px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  textarea { min-height: 76px; resize: vertical; word-break: break-all; }
+  button, .button {
+    display: inline-block; margin-top: 12px; padding: 11px 18px; border-radius: 8px; border: 1px solid var(--signal);
+    background: var(--signal); color: #fff; font: 600 15px/1.2 system-ui, sans-serif; cursor: pointer; text-decoration: none;
+  }
+  button.quiet { background: transparent; color: var(--muted); border-color: var(--line); }
+  button:disabled { opacity: .45; cursor: default; }
+  .check { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 14px; margin-top: 10px; }
+  .msg { margin-top: 12px; font-size: 15px; }
+  .ok { color: #3FB27F; } .bad { color: var(--signal); }
+  .hidden { display: none; }
+  .small { font-size: 14px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="logo.png" alt="Unmade logo">
+    <div>
+      <a class="wordmark" href="./">UNMADE</a><br>
+      <span class="handle">@unmadedocs</span>
+    </div>
+  </header>
+
+  <h1>Sign in to YouTube</h1>
+  <p class="lede">Renews the publisher's YouTube login. Everything happens in this browser: the page talks only to
+  Google, and nothing is sent to or stored on this site.</p>
+
+  <section class="step" id="s-client">
+    <h2><span class="num">0</span>The app's ID (first time on this browser only)</h2>
+    <p>The values of <code>YT_CLIENT_ID</code> and <code>YT_CLIENT_SECRET</code> from the environment settings
+    (the Google Cloud "Desktop app" client of the Unmade publisher).</p>
+    <label for="cid">Client ID</label>
+    <input id="cid" type="text" autocomplete="off" spellcheck="false" placeholder="….apps.googleusercontent.com">
+    <label for="csec">Client secret</label>
+    <input id="csec" type="password" autocomplete="off" spellcheck="false">
+    <label class="check"><input id="remember" type="checkbox" checked> Remember both on this browser</label>
+    <div id="saved" class="msg small hidden">Saved on this browser. <button class="quiet" id="forget" type="button">Forget them</button></div>
+  </section>
+
+  <section class="step">
+    <h2><span class="num">1</span>Sign in</h2>
+    <p>Opens Google in a new tab. Pick the Google account that owns the channel, then the <b>Unmade</b> channel, and
+    allow all the boxes. If Google says the app isn't verified: Advanced → Go to Unmade publisher.</p>
+    <button id="go" type="button">Sign in with Google</button>
+    <div id="go-msg" class="msg"></div>
+    <a id="go-link" class="hidden small" href="#" target="_blank" rel="noopener noreferrer">Open the Google sign-in</a>
+  </section>
+
+  <section class="step">
+    <h2><span class="num">2</span>Paste the link</h2>
+    <p>Google ends on a page that won't load ("This site can't be reached", an address starting with
+    <code>http://127.0.0.1:8765/?</code>). That is expected. Copy that whole address from the address bar and paste it
+    here.</p>
+    <label for="back">The address</label>
+    <textarea id="back" spellcheck="false" placeholder="http://127.0.0.1:8765/?state=…&amp;code=…"></textarea>
+    <button id="swap" type="button">Get the login</button>
+    <div id="swap-msg" class="msg"></div>
+  </section>
+
+  <section class="step hidden" id="s-done">
+    <h2><span class="num">3</span>Save it</h2>
+    <p id="who"></p>
+    <label for="line">The line for the environment settings</label>
+    <textarea id="line" readonly spellcheck="false"></textarea>
+    <button id="copy" type="button">Copy</button>
+    <p class="small">claude.ai/code → the environment <b>pe-production</b> → Environment variables → replace the
+    <code>YT_REFRESH_TOKEN=…</code> line with this one and save. Do the same in any other environment that has the
+    line. Don't paste it into a chat. Then close this tab: the page forgets the login when it closes.</p>
+  </section>
+
+  <footer>
+    <a href="./">Unmade</a> · <a href="privacy.html">Privacy policy</a> ·
+    Access can be removed any time at <a href="https://myaccount.google.com/connections">Google account connections</a>.
+  </footer>
+</main>
+
+<script>
+(() => {
+  const SCOPES = [
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube",
+    "https://www.googleapis.com/auth/youtube.force-ssl",
+    "https://www.googleapis.com/auth/yt-analytics.readonly",
+  ];
+  const REDIRECT = "http://127.0.0.1:8765/";        // the Desktop client's loopback address (as tools/yt_auth.py)
+  const KEY = "unmade-yt-client", PENDING = "unmade-yt-pending";
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get(k) { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } },
+    del(k) { try { localStorage.removeItem(k); } catch (e) {} },
+  };
+  let pendingMem = null;                              // fallback when the browser blocks storage
+
+  const saved = store.get(KEY);
+  if (saved && saved.id) { $("cid").value = saved.id; $("csec").value = saved.secret || ""; $("saved").classList.remove("hidden"); }
+  $("forget").onclick = () => { store.del(KEY); $("cid").value = ""; $("csec").value = ""; $("saved").classList.add("hidden"); };
+
+  const b64url = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const random = (n) => b64url(crypto.getRandomValues(new Uint8Array(n)));
+  const say = (el, text, ok) => { el.textContent = text; el.className = "msg " + (ok ? "ok" : "bad"); };
+
+  function client() {
+    const id = $("cid").value.trim(), secret = $("csec").value.trim();
+    if (!/\.apps\.googleusercontent\.com$/.test(id) || !secret) return null;
+    if ($("remember").checked && store.set(KEY, { id, secret })) $("saved").classList.remove("hidden");
+    return { id, secret };
+  }
+
+  $("go").onclick = async () => {
+    const c = client();
+    if (!c) return say($("go-msg"), "Fill in the client ID (ending .apps.googleusercontent.com) and the secret first.", false);
+    const verifier = random(48), state = random(16);
+    const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
+    pendingMem = { verifier, state, t: Date.now() };
+    store.set(PENDING, pendingMem);
+    const url = "https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams({
+      client_id: c.id, redirect_uri: REDIRECT, response_type: "code", scope: SCOPES.join(" "),
+      access_type: "offline", prompt: "consent", include_granted_scopes: "true", state,
+      code_challenge: challenge, code_challenge_method: "S256",
+    });
+    $("go-link").href = url;
+    window.open(url, "_blank", "noopener");
+    say($("go-msg"), "Google opened in a new tab (if it didn't, use the link below). Come back here when it ends on the page that won't load.", true);
+    $("go-link").classList.remove("hidden");
+  };
+
+  $("swap").onclick = async () => {
+    const msg = $("swap-msg");
+    const c = client();
+    if (!c) return say(msg, "Fill in the client ID and secret in step 0 first.", false);
+    const pending = store.get(PENDING) || pendingMem;
+    if (!pending) return say(msg, "Start with step 1 on this page (Sign in with Google), then paste the new address.", false);
+    let q;
+    try { q = new URL($("back").value.trim()).searchParams; } catch (e) { return say(msg, "That isn't a web address. Copy the whole address bar.", false); }
+    if (q.get("error")) return say(msg, "Google said: " + q.get("error") + ". Try step 1 again.", false);
+    if (!q.get("code")) return say(msg, "The address has no code in it. Copy the address of the page Google ended on.", false);
+    if (q.get("state") !== pending.state) return say(msg, "This address belongs to an older sign-in. Do step 1 again and paste the newest address.", false);
+    $("swap").disabled = true; say(msg, "Asking Google…", true);
+    try {
+      const r = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ grant_type: "authorization_code", code: q.get("code"), client_id: c.id,
+          client_secret: c.secret, redirect_uri: REDIRECT, code_verifier: pending.verifier }),
+      });
+      const tok = await r.json();
+      if (!r.ok) throw new Error((tok.error_description || tok.error || r.status) + (tok.error === "invalid_grant" ? " (the link is used up or older than 10 minutes: do step 1 again)" : ""));
+      if (!tok.refresh_token) throw new Error("Google gave no lasting login. Remove the app at Google account connections, then do step 1 again.");
+      const granted = (tok.scope || "").split(" ");
+      const missing = SCOPES.filter((s) => !granted.includes(s)).map((s) => s.split("/").pop());
+      store.del(PENDING); pendingMem = null;
+      $("back").value = "";
+      let who = "";
+      try {
+        const ch = await fetch("https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true",
+          { headers: { Authorization: "Bearer " + tok.access_token } }).then((x) => x.json());
+        const s = ch.items && ch.items[0] && ch.items[0].snippet;
+        if (s) who = s.title + (s.customUrl ? " (" + s.customUrl + ")" : "");
+      } catch (e) {}
+      $("line").value = "YT_REFRESH_TOKEN=" + tok.refresh_token;
+      $("who").textContent = (who ? "Signed in as " + who + ". " : "") +
+        (missing.length ? "Missing permission: " + missing.join(", ") + ". Do step 1 again and tick every box." : "All four permissions are in.");
+      const wrong = who && !/unmade/i.test(who);
+      $("who").className = missing.length || wrong ? "bad" : "ok";
+      if (wrong) $("who").textContent += " That is not the Unmade channel: do step 1 again and pick Unmade.";
+      $("s-done").classList.remove("hidden");
+      say(msg, "Done.", true);
+      $("s-done").scrollIntoView({ behavior: "smooth" });
+    } catch (e) {
+      say(msg, "It didn't work: " + e.message, false);
+    } finally {
+      $("swap").disabled = false;
+    }
+  };
+
+  $("copy").onclick = async () => {
+    try { await navigator.clipboard.writeText($("line").value); $("copy").textContent = "Copied"; }
+    catch (e) { $("line").select(); document.execCommand("copy"); $("copy").textContent = "Copied"; }
+    setTimeout(() => ($("copy").textContent = "Copy"), 2000);
+  };
+})();
+</script>
+</body>
+</html>
